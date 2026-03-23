@@ -20,14 +20,24 @@ class RiassuntiSmartApp extends StatelessWidget {
       title: 'Riassunti Smart',
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF3F6FB),
+        fontFamily: 'Inter',
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
+          seedColor: const Color(0xFF6366F1),
+          primary: const Color(0xFF6366F1),
+          secondary: const Color(0xFF4F46E5),
+          surface: Colors.white,
         ),
+        scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
-          backgroundColor: Color(0xFFF3F6FB),
+          backgroundColor: Colors.transparent,
           elevation: 0,
+          titleTextStyle: TextStyle(
+            color: Color(0xFF1E293B),
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.5,
+          ),
         ),
       ),
       home: const HomePage(),
@@ -200,26 +210,45 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
+      // Usiamo l'API mobile-sections per ottenere l'introduzione completa (solitamente più ampia del summary)
       final url = Uri.parse(
-        'https://it.wikipedia.org/api/rest_v1/page/summary/${Uri.encodeComponent(query)}',
+        'https://it.wikipedia.org/api/rest_v1/page/mobile-sections/${Uri.encodeComponent(query)}',
       );
 
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        
+        // La sezione 0 è sempre l'introduzione (lead section)
+        final leadSection = data['lead']?['sections']?[0]?['text'] ?? '';
+        final displayTitle = data['lead']?['displaytitle'] ?? query;
 
-        final nuovoTitolo = data['title'] ?? query;
-        final nuovoRiassunto = data['extract'] ?? '';
+        // Puliamo l'HTML dai tag per avere solo il testo
+        String cleanText = leadSection.replaceAll(RegExp(r'<[^>]*>|&[^;]+;'), ' ').trim();
+        // Rimuoviamo spazi multipli
+        cleanText = cleanText.replaceAll(RegExp(r'\s+'), ' ');
 
-        if (nuovoRiassunto.toString().trim().isEmpty) {
+        if (cleanText.isEmpty) {
+          // Fallback al summary standard se mobile-sections fallisce o è vuoto
+          final summaryUrl = Uri.parse(
+            'https://it.wikipedia.org/api/rest_v1/page/summary/${Uri.encodeComponent(query)}',
+          );
+          final summaryRes = await http.get(summaryUrl);
+          if (summaryRes.statusCode == 200) {
+            final summaryData = jsonDecode(summaryRes.body);
+            cleanText = summaryData['extract'] ?? '';
+          }
+        }
+
+        if (cleanText.isEmpty) {
           setState(() {
             errore = 'Nessun riassunto trovato';
           });
         } else {
           setState(() {
-            titolo = nuovoTitolo;
-            riassunto = nuovoRiassunto;
+            titolo = displayTitle.replaceAll(RegExp(r'<[^>]*>'), '');
+            riassunto = cleanText;
           });
         }
       } else {
@@ -443,14 +472,49 @@ class _HomePageState extends State<HomePage> {
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      boxShadow: const [
+      borderRadius: BorderRadius.circular(24),
+      boxShadow: [
         BoxShadow(
-          color: Color.fromARGB(18, 0, 0, 0),
-          blurRadius: 12,
-          offset: Offset(0, 4),
+          color: Colors.black.withOpacity(0.04),
+          blurRadius: 16,
+          offset: const Offset(0, 4),
         ),
       ],
+      border: Border.all(color: const Color(0xFFF1F5F9)),
+    );
+  }
+
+  Widget _buildActionButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -459,472 +523,322 @@ class _HomePageState extends State<HomePage> {
     final bool haRisultato = titolo.isNotEmpty && riassunto.isNotEmpty;
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text(
-          'Riassunti Smart',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF111827),
+        title: const Text('Riassunti Smart'),
+        actions: [
+          if (salvati.isNotEmpty)
+            IconButton(
+              onPressed: cancellaTutto,
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+            ),
+        ],
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF8FAFC), Color(0xFFF1F5F9)],
           ),
         ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: _cardDecoration(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Cerca un argomento',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF111827),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Scrivi o parla: Napoleone, Dante, Roma, Leonardo da Vinci...',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Color(0xFF6B7280),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _controller,
-                  onSubmitted: (_) => cerca(),
-                  decoration: InputDecoration(
-                    hintText: 'Scrivi es. Napoleone',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          onPressed: toggleMicrofono,
-                          icon: Icon(
-                            _isListening ? Icons.mic : Icons.mic_none,
-                            color: _isListening ? Colors.red : Colors.blue,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            _controller.clear();
-                            setState(() {
-                              titolo = '';
-                              riassunto = '';
-                              errore = '';
-                            });
-                          },
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFF9FAFB),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF2563EB),
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                if (_isListening)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Row(
-                      children: [
-                        Icon(Icons.mic, color: Colors.red),
-                        SizedBox(width: 8),
-                        Text(
-                          'Sto ascoltando...',
-                          style: TextStyle(
-                            color: Colors.red,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: cerca,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2563EB),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                        ),
-                        icon: const Icon(Icons.auto_awesome),
-                        label: const Text(
-                          'Trova riassunto',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      onPressed: toggleMicrofono,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _isListening ? Colors.red : Colors.black87,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(18),
-                        ),
-                      ),
-                      icon: Icon(_isListening ? Icons.stop : Icons.mic),
-                      label: Text(_isListening ? 'Stop' : 'Parla'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (loading)
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 110, 16, 32),
+          children: [
+            // Search Section
             Container(
-              padding: const EdgeInsets.all(16),
-              decoration: _cardDecoration(),
-              child: const Row(
-                children: [
-                  SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 3),
-                  ),
-                  SizedBox(width: 12),
-                  Text(
-                    'Sto cercando il riassunto...',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          if (errore.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: _cardDecoration(),
-              child: Text(
-                errore,
-                style: const TextStyle(
-                  color: Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          if (haRisultato) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(20),
               decoration: _cardDecoration(),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    titolo,
-                    style: const TextStyle(
+                  const Text(
+                    'Cosa vuoi studiare?',
+                    style: TextStyle(
                       fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF111827),
+                      fontWeight: FontWeight.w800,
+                      color: Color(0xFF1E293B),
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    riassunto,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      height: 1.5,
-                      color: Color(0xFF374151),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _controller,
+                    onSubmitted: (_) => cerca(),
+                    decoration: InputDecoration(
+                      hintText: 'Es. Napoleone, Roma antica...',
+                      hintStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                      prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF6366F1)),
+                      suffixIcon: _controller.text.isNotEmpty 
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            onPressed: () {
+                              _controller.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(20),
+                        borderSide: const BorderSide(color: Color(0xFF6366F1), width: 2),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: salva,
-                          icon: const Icon(Icons.bookmark),
-                          label: const Text('Salva'),
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: cerca,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: const Color(0xFF6366F1),
                             foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            elevation: 0,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(18),
                             ),
+                          ),
+                          child: const Text(
+                            'Cerca Ora',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: leggiRiassunto,
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: _isListening ? Colors.redAccent.withOpacity(0.1) : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: IconButton(
+                          onPressed: toggleMicrofono,
                           icon: Icon(
-                            _isSpeaking ? Icons.stop_circle : Icons.volume_up,
+                            _isListening ? Icons.mic : Icons.mic_none_rounded,
+                            color: _isListening ? Colors.redAccent : const Color(0xFF475569),
                           ),
-                          label: Text(_isSpeaking ? 'Stop voce' : 'Leggi'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
+                          padding: const EdgeInsets.all(16),
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: video,
-                          icon: const Icon(Icons.play_circle),
-                          label: const Text('Video'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: google,
-                          icon: const Icon(Icons.search),
-                          label: const Text('Google'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: chatgpt,
-                      icon: const Icon(Icons.smart_toy),
-                      label: const Text('Apri ChatGPT'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black87,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ),
             ),
-          ],
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: _cardDecoration(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Salvati',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF111827),
-                      ),
-                    ),
-                    if (salvati.isNotEmpty)
-                      TextButton.icon(
-                        onPressed: cancellaTutto,
-                        icon: const Icon(
-                          Icons.delete_forever,
-                          color: Colors.red,
-                        ),
-                        label: const Text(
-                          'Cancella tutto',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                  ],
+
+            if (loading) ...[
+              const SizedBox(height: 24),
+              const Center(child: CircularProgressIndicator()),
+            ],
+
+            if (errore.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Scorri la lista. Per eliminare un elemento, trascinalo a destra o sinistra.',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF6B7280),
+                child: Text(
+                  errore,
+                  style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+
+            if (haRisultato) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: _cardDecoration().copyWith(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Colors.white, Colors.blue.withOpacity(0.02)],
                   ),
                 ),
-                const SizedBox(height: 14),
-                salvati.isEmpty
-                    ? Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9FAFB),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Text(
-                          'Nessun riassunto salvato',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: Color(0xFF6B7280),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            titolo,
+                            style: const TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF1E293B),
+                              letterSpacing: -1,
+                            ),
                           ),
                         ),
-                      )
-                    : SizedBox(
-                        height: 340,
-                        child: Scrollbar(
-                          controller: _savedScrollController,
-                          thumbVisibility: true,
-                          child: ListView.separated(
-                            controller: _savedScrollController,
-                            itemCount: salvati.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (context, index) {
-                              final item = salvati[index];
-
-                              return Dismissible(
-                                key: ValueKey('${item.titolo}-$index'),
-                                direction: DismissDirection.horizontal,
-                                background: Container(
-                                  alignment: Alignment.centerLeft,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: const Row(
-                                    children: [
-                                      Icon(Icons.delete, color: Colors.white),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        'Elimina',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                secondaryBackground: Container(
-                                  alignment: Alignment.centerRight,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 20,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red,
-                                    borderRadius: BorderRadius.circular(18),
-                                  ),
-                                  child: const Row(
-                                    mainAxisAlignment: MainAxisAlignment.end,
-                                    children: [
-                                      Text(
-                                        'Elimina',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      SizedBox(width: 8),
-                                      Icon(Icons.delete, color: Colors.white),
-                                    ],
-                                  ),
-                                ),
-                                onDismissed: (_) {
-                                  eliminaSalvato(index);
-                                },
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF9FAFB),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: const Color(0xFFE5E7EB),
-                                    ),
-                                  ),
-                                  child: ListTile(
-                                    contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 8,
-                                    ),
-                                    title: Text(
-                                      item.titolo,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF111827),
-                                      ),
-                                    ),
-                                    subtitle: Padding(
-                                      padding: const EdgeInsets.only(top: 6),
-                                      child: Text(
-                                        item.testo,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          color: Color(0xFF6B7280),
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                    ),
-                                    onTap: () => apriSalvato(item),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                        IconButton(
+                          onPressed: salva,
+                          icon: const Icon(Icons.bookmark_add_rounded, size: 28),
+                          color: const Color(0xFF6366F1),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      riassunto,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        height: 1.6,
+                        color: Color(0xFF475569),
+                        fontWeight: FontWeight.w400,
                       ),
+                    ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      'Approfondisci su:',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF94A3B8),
+                        textBaseline: TextBaseline.alphabetic,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildActionButton(
+                          onPressed: google,
+                          icon: Icons.search_rounded,
+                          label: 'Google',
+                          color: Colors.blue,
+                        ),
+                        _buildActionButton(
+                          onPressed: video,
+                          icon: Icons.play_circle_fill_rounded,
+                          label: 'YouTube',
+                          color: Colors.red,
+                        ),
+                        _buildActionButton(
+                          onPressed: chatgpt,
+                          icon: Icons.auto_awesome_rounded,
+                          label: 'ChatGPT',
+                          color: const Color(0xFF10A37F),
+                        ),
+                        _buildActionButton(
+                          onPressed: leggiRiassunto,
+                          icon: _isSpeaking ? Icons.stop_circle_rounded : Icons.volume_up_rounded,
+                          label: _isSpeaking ? 'Ferma' : 'Ascolta',
+                          color: Colors.deepPurple,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 40),
+            Row(
+              children: [
+                const Text(
+                  'I tuoi riassunti',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                const Spacer(),
+                if (salvati.isNotEmpty)
+                  const Text(
+                    'Swipe per eliminare',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                  ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+
+            if (salvati.isEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Column(
+                  children: [
+                    Icon(Icons.bookmark_border_rounded, size: 48, color: Colors.grey[300]),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Ancora nulla di salvato',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: salvati.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final item = salvati[index];
+                  return Dismissible(
+                    key: ValueKey(item.titolo + index.toString()),
+                    direction: DismissDirection.horizontal,
+                    background: Container(
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.only(left: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(Icons.delete_rounded, color: Colors.white),
+                    ),
+                    secondaryBackground: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 20),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(Icons.delete_rounded, color: Colors.white),
+                    ),
+                    onDismissed: (_) => eliminaSalvato(index),
+                    child: Container(
+                      decoration: _cardDecoration(),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        title: Text(
+                          item.titolo,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF1E293B),
+                          ),
+                        ),
+                        subtitle: Text(
+                          item.testo,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Color(0xFF64748B)),
+                        ),
+                        trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFFCBD5E1)),
+                        onTap: () => apriSalvato(item),
+                      ),
+                    ),
+                  );
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

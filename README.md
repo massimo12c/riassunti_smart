@@ -1,17 +1,27 @@
-# riassunti_smart
+# 📚 Riassunti Smart
 
-A new Flutter project.
+**Riassunti Smart** è un'applicazione moderna ed elegante sviluppata con Flutter, progettata per aiutare gli studenti a ottenere riassunti rapidi e approfonditi su qualsiasi argomento (storia, scienze, letteratura e molto altro).
 
-## Getting Started
+## 🚀 Prova l'App Online
+Puoi provare la versione web dell'app direttamente qui:
+👉 **[https://massimo12c.github.io/riassunti_smart/](https://massimo12c.github.io/riassunti_smart/)**
 
-This project is a starting point for a Flutter application.
+## ✨ Caratteristiche Principali
+- **Riassunti Approfonditi**: Utilizza le API di Wikipedia per fornire introduzioni dettagliate e complete (es. prova a cercare "Napoleone").
+- **Design Elegante**: Interfaccia moderna basata su Material 3 con gradienti, card raffinate e un'esperienza utente fluida.
+- **Approfondimenti Esterni**: Link rapidi a Google, YouTube (video spiegazioni) e ChatGPT per approfondire ogni ricerca.
+- **Lettura Vocale (TTS)**: Ascolta il riassunto invece di leggerlo, ideale per lo studio in movimento.
+- **Salva per Dopo**: Salva i tuoi riassunti preferiti per consultarli offline.
+- **Gestione Intuitiva**: Elimina i salvati con un semplice gesto (Swipe-to-delete).
 
-A few resources to get you started if this is your first Flutter project:
+## 🛠️ Tecnologie Utilizzate
+- **Flutter & Dart**
+- **Material 3 Design**
+- **HTTP**: Per il recupero dei dati da Wikipedia.
+- **Shared Preferences**: Per la persistenza locale dei riassunti salvati.
+- **URL Launcher**: Per l'apertura di link esterni.
+- **Speech to Text**: Supporto per la ricerca vocale.
+- **Flutter TTS**: Per la sintesi vocale dei testi.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+Sviluppato con ❤️ per rendere lo studio più semplice e veloce.
